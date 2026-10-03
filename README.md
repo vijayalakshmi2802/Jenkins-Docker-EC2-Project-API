@@ -97,7 +97,7 @@ Jenkinsfile           CI/CD pipeline
 - Add Prometheus metrics and a **Grafana** dashboard
 - Deploy to **ECS/EKS** behind an Application Load Balancer
 
-## Resume bullet (edit with your real numbers)
+## 
 > Built and deployed a containerized Flask + PostgreSQL REST API using a Jenkins CI/CD pipeline
 > (GitHub webhook, automated lint/tests, Docker image build, Docker Hub push, automated SSH deployment
 > to AWS EC2), reducing deployment time from manual steps to a fully automated flow.

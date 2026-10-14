@@ -8,7 +8,7 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "YOUR_DOCKERHUB_USERNAME/devops-task-api"
+        IMAGE_NAME = "vijayalakshmi2802/devops-task-api"
         IMAGE_TAG  = "${env.BUILD_NUMBER}"
     }
 
@@ -57,7 +57,13 @@ pipeline {
         }
 
         stage('Deploy to EC2') {
-            when { branch 'main' }
+            when {
+                expression {
+                env.BRANCH_NAME == 'main' ||
+                env.GIT_BRANCH == 'origin/main' ||
+                env.GIT_BRANCH == 'main'
+                }
+                }
             steps {
                 withCredentials([
                     string(credentialsId: 'ec2-host', variable: 'EC2_HOST'),

@@ -1,4 +1,4 @@
-# Used on the EC2 server: pulls the prebuilt image from Docker Hub instead of building.
+
 services:
   db:
     image: postgres:16-alpine
@@ -25,6 +25,14 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
+  frontend:
+    image: ${FRONTEND_IMAGE}
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    depends_on:
+      - api
 
 volumes:
   pgdata:

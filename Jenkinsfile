@@ -4,7 +4,8 @@ pipeline {
 
     environment {
         IMAGE_NAME = "vijayalakshmi2802/devops-task-api"
-        IMAGE_TAG  = "${BUILD_NUMBER}"
+        FRONTEND_IMAGE_NAME = "vijayalakshmi2802/devops-task-frontend"
+        IMAGE_TAG = "${BUILD_NUMBER}"
     }
 
     stages {
@@ -37,7 +38,7 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Build Backend Docker Image') {
             steps {
                 sh '''
                     set -e
@@ -48,7 +49,25 @@ pipeline {
             }
         }
 
-        stage('Push Image') {
+        stage('Build Frontend Docker Image') {
+            steps {
+                sh '''
+                    set -e
+                    test -f frontend/Dockerfile
+                    test -f frontend/nginx.conf
+                    test -f frontend/index.html
+                    test -f frontend/style.css
+                    test -f frontend/script.js
+
+                    docker build \
+                        -t "$FRONTEND_IMAGE_NAME:$IMAGE_TAG" \
+                        -t "$FRONTEND_IMAGE_NAME:latest" \
+                        ./frontend
+                '''
+            }
+        }
+
+        stage('Push Images to Docker Hub') {
             steps {
                 withCredentials([
                     usernamePassword(
@@ -59,11 +78,15 @@ pipeline {
                 ]) {
                     sh '''
                         set -e
+
                         echo "$DH_PASS" | docker login \
                             -u "$DH_USER" --password-stdin
 
                         docker push "$IMAGE_NAME:$IMAGE_TAG"
                         docker push "$IMAGE_NAME:latest"
+
+                        docker push "$FRONTEND_IMAGE_NAME:$IMAGE_TAG"
+                        docker push "$FRONTEND_IMAGE_NAME:latest"
                     '''
                 }
             }
@@ -99,13 +122,13 @@ pipeline {
                                 "$EC2_HOST" \
                                 "mkdir -p ~/devops-task-api"
 
-                            echo "Copying Docker Compose configuration..."
+                            echo "Copying Compose configuration..."
 
                             scp -o StrictHostKeyChecking=no \
                                 docker-compose.prod.yml \
                                 "$EC2_HOST:~/devops-task-api/docker-compose.yml"
 
-                            echo "Copying database environment file..."
+                            echo "Copying environment file..."
 
                             scp -o StrictHostKeyChecking=no \
                                 "$ENV_FILE" \
@@ -117,11 +140,11 @@ pipeline {
                                 scripts/deploy.sh \
                                 "$EC2_HOST:~/devops-task-api/deploy.sh"
 
-                            echo "Deploying application..."
+                            echo "Deploying backend and frontend..."
 
                             ssh -o StrictHostKeyChecking=no \
                                 "$EC2_HOST" \
-                                "cd ~/devops-task-api && IMAGE=$IMAGE_NAME:$IMAGE_TAG bash deploy.sh"
+                                "cd ~/devops-task-api && IMAGE='$IMAGE_NAME:$IMAGE_TAG' FRONTEND_IMAGE='$FRONTEND_IMAGE_NAME:$IMAGE_TAG' bash deploy.sh"
 
                             echo "Deployment command completed."
                         '''
@@ -133,11 +156,13 @@ pipeline {
 
     post {
         success {
-            echo "Pipeline completed successfully. Image: ${IMAGE_NAME}:${IMAGE_TAG}"
+            echo "Pipeline completed successfully."
+            echo "Backend image: ${IMAGE_NAME}:${IMAGE_TAG}"
+            echo "Frontend image: ${FRONTEND_IMAGE_NAME}:${IMAGE_TAG}"
         }
 
         failure {
-            echo "Pipeline failed. Check the Console Output for the failing stage."
+            echo "Pipeline failed. Check Console Output for the failing stage."
         }
 
         always {

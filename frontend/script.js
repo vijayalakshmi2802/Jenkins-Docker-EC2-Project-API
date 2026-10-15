@@ -1,5 +1,18 @@
 
-const API = "";
+/*
+ * TaskFlow — DevOps Task Manager
+ * Supports GitHub Pages frontend and EC2-hosted frontend.
+ *
+ * IMPORTANT:
+ * Set GITHUB_API_BASE to your real HTTPS API URL before publishing.
+ * Example: "https://api.yourdomain.com"
+ */
+
+const GITHUB_API_BASE = "https://YOUR-HTTPS-API-DOMAIN";
+const isGitHubPages =
+  window.location.hostname === "vijayalakshmi2802.github.io";
+
+const API = isGitHubPages ? GITHUB_API_BASE : "";
 
 const $ = (id) => document.getElementById(id);
 
@@ -32,14 +45,17 @@ async function apiRequest(path, options = {}) {
 
   if (!response.ok) {
     let message = `Request failed (${response.status})`;
+
     try {
       const data = await response.json();
       message = data.error || message;
     } catch (_) {}
+
     throw new Error(message);
   }
 
   if (response.status === 204) return null;
+
   return response.json();
 }
 
@@ -52,6 +68,17 @@ function showMessage(message, type = "success") {
 
 function clearMessage() {
   $("message").hidden = true;
+}
+
+function setApiStatus(online) {
+  $("apiStatus").textContent = online ? "Connected" : "Unavailable";
+
+  const dot = document.querySelector(".status-dot");
+  if (dot) {
+    dot.className = online
+      ? "status-dot online"
+      : "status-dot offline";
+  }
 }
 
 function statusLabel(status) {
@@ -86,8 +113,10 @@ function renderTasks() {
   });
 
   $("totalCount").textContent = state.tasks.length;
+
   $("pendingCount").textContent =
     state.tasks.filter((task) => task.status === "pending").length;
+
   $("completedCount").textContent =
     state.tasks.filter(isCompleted).length;
 
@@ -109,7 +138,8 @@ function renderTasks() {
     list.innerHTML = filtered.map((task) => {
       const completed = isCompleted(task);
       const statusClass = String(task.status || "")
-        .toLowerCase().replaceAll(" ", "-");
+        .toLowerCase()
+        .replaceAll(" ", "-");
 
       return `
         <article class="task-card ${completed ? "is-completed" : ""}">
@@ -122,22 +152,40 @@ function renderTasks() {
               aria-label="Toggle task completion"
               ${completed ? "checked" : ""}
             >
+
             <div>
               <h3 class="task-title">${escapeHTML(task.title)}</h3>
+
               ${task.description ? `
-                <p class="task-description">${escapeHTML(task.description)}</p>
+                <p class="task-description">
+                  ${escapeHTML(task.description)}
+                </p>
               ` : ""}
+
               <div class="task-meta">
-                <span class="task-id">TASK #${escapeHTML(task.id)}</span>
+                <span class="task-id">
+                  TASK #${escapeHTML(task.id)}
+                </span>
+
                 <span class="status-pill ${escapeHTML(statusClass)}">
                   ${escapeHTML(statusLabel(task.status))}
                 </span>
               </div>
             </div>
           </div>
+
           <div class="task-actions">
-            <button class="small-btn" data-action="edit" data-id="${escapeHTML(task.id)}">Edit</button>
-            <button class="danger-btn" data-action="delete" data-id="${escapeHTML(task.id)}">Delete</button>
+            <button
+              class="small-btn"
+              data-action="edit"
+              data-id="${escapeHTML(task.id)}"
+            >Edit</button>
+
+            <button
+              class="danger-btn"
+              data-action="delete"
+              data-id="${escapeHTML(task.id)}"
+            >Delete</button>
           </div>
         </article>`;
     }).join("");
@@ -149,28 +197,37 @@ function renderTasks() {
 
 async function loadTasks(showNotice = false) {
   clearMessage();
-  $("taskList").innerHTML = '<div class="loading">Loading tasks…</div>';
+
+  $("taskList").innerHTML =
+    '<div class="loading">Loading tasks…</div>';
 
   try {
-    state.tasks = await apiRequest("/api/tasks");
-    if (!Array.isArray(state.tasks)) {
+    const tasks = await apiRequest("/api/tasks");
+
+    if (!Array.isArray(tasks)) {
       throw new Error("Unexpected task list format from the API.");
     }
-    $("apiStatus").textContent = "Connected";
-    document.querySelector(".status-dot").className = "status-dot online";
+
+    state.tasks = tasks;
+    setApiStatus(true);
     renderTasks();
-    if (showNotice) showMessage("Tasks refreshed successfully.");
+
+    if (showNotice) {
+      showMessage("Tasks refreshed successfully.");
+    }
   } catch (error) {
+    setApiStatus(false);
+
     $("taskList").innerHTML = `
       <div class="empty-state">
         <strong>Unable to load tasks</strong>
         ${escapeHTML(error.message)}
       </div>`;
-    $("apiStatus").textContent = "Unavailable";
-    document.querySelector(".status-dot").className = "status-dot offline";
+
     $("listFooter").textContent = "API connection failed";
+
     showMessage(
-      `${error.message}. Check that the API and database are running.`,
+      `${error.message}. Check the API connection and database.`,
       "error"
     );
   }
@@ -179,15 +236,16 @@ async function loadTasks(showNotice = false) {
 async function checkHealth() {
   try {
     const result = await apiRequest("/health");
+
     if (result.status === "ok" && result.database === "up") {
-      $("apiStatus").textContent = "Connected";
-      document.querySelector(".status-dot").className = "status-dot online";
-    } else {
-      throw new Error("Database is not healthy");
+      setApiStatus(true);
+      return true;
     }
+
+    throw new Error("Database is not healthy.");
   } catch (_) {
-    $("apiStatus").textContent = "Unavailable";
-    document.querySelector(".status-dot").className = "status-dot offline";
+    setApiStatus(false);
+    return false;
   }
 }
 
@@ -218,6 +276,7 @@ $("taskForm").addEventListener("submit", async (event) => {
   clearMessage();
 
   const id = $("taskId").value;
+
   const payload = {
     title: $("titleInput").value.trim(),
     description: $("descriptionInput").value.trim(),
@@ -234,7 +293,9 @@ $("taskForm").addEventListener("submit", async (event) => {
 
   try {
     await apiRequest(
-      id ? `/api/tasks/${encodeURIComponent(id)}` : "/api/tasks",
+      id
+        ? `/api/tasks/${encodeURIComponent(id)}`
+        : "/api/tasks",
       {
         method: id ? "PUT" : "POST",
         body: JSON.stringify(payload)
@@ -243,12 +304,16 @@ $("taskForm").addEventListener("submit", async (event) => {
 
     dialog.close();
     await loadTasks();
-    showMessage(id ? "Task updated successfully." : "Task created successfully.");
+
+    showMessage(
+      id ? "Task updated successfully." : "Task created successfully."
+    );
   } catch (error) {
     showMessage(error.message, "error");
   } finally {
     $("saveTaskBtn").disabled = false;
-    $("saveTaskBtn").textContent = id ? "Save changes" : "Create task";
+    $("saveTaskBtn").textContent =
+      id ? "Save changes" : "Create task";
   }
 });
 
@@ -258,7 +323,11 @@ $("taskList").addEventListener("click", async (event) => {
 
   const id = button.dataset.id;
   const action = button.dataset.action;
-  const task = state.tasks.find((item) => String(item.id) === String(id));
+
+  const task = state.tasks.find(
+    (item) => String(item.id) === String(id)
+  );
+
   if (!task) return;
 
   clearMessage();
@@ -269,12 +338,16 @@ $("taskList").addEventListener("click", async (event) => {
   }
 
   if (action === "delete") {
-    if (!confirm(`Delete "${task.title}"? This cannot be undone.`)) return;
+    if (!confirm(`Delete "${task.title}"? This cannot be undone.`)) {
+      return;
+    }
 
     try {
-      await apiRequest(`/api/tasks/${encodeURIComponent(id)}`, {
-        method: "DELETE"
-      });
+      await apiRequest(
+        `/api/tasks/${encodeURIComponent(id)}`,
+        { method: "DELETE" }
+      );
+
       await loadTasks();
       showMessage("Task deleted successfully.");
     } catch (error) {
@@ -284,25 +357,29 @@ $("taskList").addEventListener("click", async (event) => {
 });
 
 $("taskList").addEventListener("change", async (event) => {
-  const checkbox = event.target.closest('input[data-action="toggle"]');
+  const checkbox = event.target.closest(
+    'input[data-action="toggle"]'
+  );
+
   if (!checkbox) return;
 
   const task = state.tasks.find(
     (item) => String(item.id) === String(checkbox.dataset.id)
   );
+
   if (!task) return;
 
-  /*
-   * The API's accepted status values are defined by VALID_STATUSES
-   * in app/models.py. Use "completed" only if that value is allowed.
-   */
   const nextStatus = checkbox.checked ? "completed" : "pending";
 
   try {
-    await apiRequest(`/api/tasks/${encodeURIComponent(task.id)}`, {
-      method: "PUT",
-      body: JSON.stringify({ status: nextStatus })
-    });
+    await apiRequest(
+      `/api/tasks/${encodeURIComponent(task.id)}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ status: nextStatus })
+      }
+    );
+
     await loadTasks();
     showMessage("Task status updated.");
   } catch (error) {
@@ -334,13 +411,16 @@ $("completedNav").addEventListener("click", () => setView("completed"));
 
 $("addTaskTop").addEventListener("click", openCreateDialog);
 $("refreshBtn").addEventListener("click", () => loadTasks(true));
+
 $("searchInput").addEventListener("input", (event) => {
   state.search = event.target.value;
   renderTasks();
 });
+
 $("statusFilter").addEventListener("change", renderTasks);
 $("closeDialog").addEventListener("click", () => dialog.close());
 $("cancelDialog").addEventListener("click", () => dialog.close());
+
 
 checkHealth();
 loadTasks();

@@ -8,9 +8,10 @@
  * Example: "https://api.yourdomain.com"
  */
 
-const GITHUB_API_BASE = "https://YOUR-HTTPS-API-DOMAIN";
+const GITHUB_API_BASE = "";
 const isGitHubPages =
   window.location.hostname === "vijayalakshmi2802.github.io";
+
 
 const API = isGitHubPages ? GITHUB_API_BASE : "";
 
